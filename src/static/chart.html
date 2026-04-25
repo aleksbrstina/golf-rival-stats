@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <title>Golf Rival - Match count (last 7 days)</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 980px; margin: 30px auto;
+           padding: 0 20px; color: #222; }
+    h1 { margin-bottom: 6px; }
+    p.subtitle { color: #666; margin-top: 0; }
+    #chart-wrap { position: relative; height: 460px; }
+    #status { color: #999; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Golf Rival - Match Count (last 7 days)</h1>
+  <p class="subtitle">Live data from /map-stats. One line per map.</p>
+  <div id="status">Loading...</div>
+  <div id="chart-wrap"><canvas id="chart"></canvas></div>
+
+<script>
+async function main() {
+  const status = document.getElementById('status');
+
+  // 1. Skini listu mapa
+  const maps = await fetch('/maps').then(r => r.json());
+
+  // 2. Za svaku mapu, povuci /map-stats
+  const all = await Promise.all(
+    maps.map(name => fetch('/map-stats/' + encodeURIComponent(name))
+                       .then(r => r.json())
+                       .then(rows => ({ name, rows })))
+  );
+
+  // 3. Odredi opseg poslednjih 7 dana = max(date) preko svih mapa - 6 dana
+  const allDates = all.flatMap(m => m.rows.map(r => r.date));
+  if (allDates.length === 0) {
+    status.textContent = 'Nema podataka.';
+    return;
+  }
+  const maxDate = allDates.sort().slice(-1)[0];
+  const end = new Date(maxDate + 'T00:00:00Z');
+  const labels = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(end);
+    d.setUTCDate(d.getUTCDate() - i);
+    labels.push(d.toISOString().slice(0, 10));
+  }
+
+  // 4. Per-mapa: array match_cnt poravnat sa labels
+  const palette = ['#e6194B','#3cb44b','#4363d8','#f58231','#911eb4',
+                   '#42d4f4','#f032e6','#9A6324','#800000','#469990'];
+  const datasets = all.map((m, i) => {
+    const byDate = Object.fromEntries(m.rows.map(r => [r.date, r.match_cnt]));
+    return {
+      label: m.name,
+      data:  labels.map(d => byDate[d] ?? 0),
+      borderColor: palette[i % palette.length],
+      backgroundColor: palette[i % palette.length] + '33',
+      tension: 0.25,
+      fill: false,
+    };
+  });
+
+  status.textContent = `Showing ${labels[0]} to ${labels[labels.length-1]}`;
+
+  new Chart(document.getElementById('chart'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' },
+                 title: { display: false } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: 'match_cnt' } },
+                x: { title: { display: true, text: 'date' } } },
+    },
+  });
+}
+main().catch(e => {
+  document.getElementById('status').textContent = 'Greska: ' + e.message;
+  console.error(e);
+});
+</script>
+</body>
+</html>
