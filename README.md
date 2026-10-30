@@ -45,11 +45,7 @@ two rows belonging to the same physical match, so distinct match counting
 
 ### How sessions are detected
 
-Sessions are reconstructed using the **120-second gap rule** stated in the
-challenge: if more than 120 seconds pass between two pings, they belong to
-different sessions. The `state` column is treated as informative only. This
-is robust to missing or corrupted `state` values (the input contains 99
-pings with invalid state).
+Sessions are split using the 120-second gap rule only, without relying on the state column. Pings with a missing state value (99 in the input) are rejected earlier, during validation, because they do not meet the stated event requirements.
 
 ### Match pairing
 
